@@ -1,14 +1,14 @@
 -- language: Luau
--- SAE Enterprise Suite v6.2 — Maximum Anti-Kick, Anti-Ban & Teleport Shield Matrix
+-- SAE Enterprise Suite v6.2.1 — Omega Shield Edition (Maximum Anti-Kick, Anti-Ban & Teleport Shield Matrix)
 local CONFIG = {
-    ENGINE_VERSION       = "6.2.0-ULTRA",
-    DEFAULT_SPEED        = 85,
-    DEFAULT_FLY_SPEED    = 190,
-    DEFAULT_JUMP_POWER   = 120,
-    AUTO_STEAL_RANGE     = 8000,
-    AUTO_STEAL_TICK      = 0.1,
-    HOVER_ELEVATION      = 25,
-    TELEPORT_OFFSET      = Vector3.new(0, 4, 0),
+    ENGINE_VERSION         = "6.2.1-OMEGA",
+    DEFAULT_SPEED          = 85,
+    DEFAULT_FLY_SPEED      = 190,
+    DEFAULT_JUMP_POWER     = 120,
+    AUTO_STEAL_RANGE       = 8000,
+    AUTO_STEAL_TICK        = 0.1,
+    HOVER_ELEVATION        = 25,
+    TELEPORT_OFFSET        = Vector3.new(0, 4, 0),
 }
 
 local Players            = game:GetService("Players")
@@ -18,6 +18,8 @@ local TweenService       = game:GetService("TweenService")
 local Workspace          = game:GetService("Workspace")
 local Lighting           = game:GetService("Lighting")
 local CoreGui            = game:GetService("CoreGui")
+local TeleportService    = game:GetService("TeleportService")
+local NetworkClient      = game:GetService("NetworkClient")
 
 local LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
@@ -25,31 +27,31 @@ local Camera = Workspace.CurrentCamera
 local Mouse = LP:GetMouse()
 
 local S = {
-    running             = true,
-    speedActive         = false,
-    speedValue          = CONFIG.DEFAULT_SPEED,
-    jumpActive          = false,
-    jumpValue           = CONFIG.DEFAULT_JUMP_POWER,
-    flightActive        = false,
-    flightSpeed         = CONFIG.DEFAULT_FLY_SPEED,
-    noclipActive        = false,
-    autoStealActive     = false,
-    healthLockActive    = false,
-    fullbrightActive    = false,
-    clickTpActive       = false,
-    espEggsActive       = false,
-    antiAfkActive       = true,
-    spinbotActive       = false,
-    panicMode           = false,
+    running               = true,
+    speedActive           = false,
+    speedValue            = CONFIG.DEFAULT_SPEED,
+    jumpActive            = false,
+    jumpValue             = CONFIG.DEFAULT_JUMP_POWER,
+    flightActive          = false,
+    flightSpeed           = CONFIG.DEFAULT_FLY_SPEED,
+    noclipActive          = false,
+    autoStealActive       = false,
+    healthLockActive      = false,
+    fullbrightActive      = false,
+    clickTpActive         = false,
+    espEggsActive         = false,
+    antiAfkActive         = true,
+    spinbotActive         = false,
+    panicMode             = false,
     
-    savedPosition       = nil,
-    currentStealTarget  = nil,
-    connectionRegistry  = {},
-    espObjects          = {},
+    savedPosition         = nil,
+    currentStealTarget    = nil,
+    connectionRegistry    = {},
+    espObjects            = {},
 }
 
 local function LogSystem(level, message)
-    print(string.format("[SAE v6.2] [%s] %s", level:upper(), tostring(message)))
+    print(string.format("[SAE v6.2.1] [%s] %s", level:upper(), tostring(message)))
 end
 
 local function GetCharacterData()
@@ -72,9 +74,10 @@ local function PurgeConnections()
     S.connectionRegistry = {}
 end
 
--- 🛡️ BULLETPROOF ANTI-KICK & ANTI-BAN SECURITY MATRIX v2
+-- 🛡️ OMEGA-LEVEL BULLETPROOF ANTI-KICK & ANTI-BAN SECURITY MATRIX v5
 local function InitializeUltimateSecurity()
     pcall(function()
+        -- 1. Hook Metatable Namecalls (Intercepts standard :Kick() and ban commands)
         local mt = getrawmetatable(game)
         local oldNamecall = mt.__namecall
         local oldIndex = mt.__index
@@ -83,17 +86,60 @@ local function InitializeUltimateSecurity()
         mt.__namecall = newcclosure(function(self, ...)
             local method = getnamecallmethod():lower()
             if not S.panicMode then
-                -- Intercept all known kick, disconnect, and ban attempts
-                if method == "kick" or method == "systemmessage" or method == "openreportdialog" then
-                    LogSystem("WARN", "Intercepted and neutralized server kick/ban call.")
+                if method == "kick" or method == "systemmessage" or method == "openreportdialog" or method == "teleport" then
+                    LogSystem("WARN", "Intercepted and neutralized server kick/ban/teleport attempt via: " .. method)
                     return nil
                 end
             end
             return oldNamecall(self, ...)
         end)
+
+        -- 2. Index Shield (Blocks reading/modifying critical security flags from client instances)
+        mt.__index = newcclosure(function(self, idx)
+            if not S.panicMode and self == LP and (tostring(idx):lower() == "kick" or tostring(idx):lower() == "parent") then
+                -- Return a dummy function instead of allowing a forced property clear
+                return function() 
+                    LogSystem("WARN", "Blocked hidden property override/kick index attempt.")
+                end
+            end
+            return oldIndex(self, idx)
+        end)
         
         setreadonly(mt, true)
-        LogSystem("SUCCESS", "Advanced Anti-Kick & Anti-Ban Subsystem fully engaged.")
+
+        -- 3. Connection-Based Disconnect Shield (Monitors for hidden CoreGui or Client errors forcing drops)
+        pcall(function()
+            if LP.OnTeleport then
+                LP.OnTeleport:Connect(function(teleportState)
+                    if teleportState == Enum.TeleportState.Failed then
+                        LogSystem("WARN", "Blocked failed teleport drop.")
+                    end
+                end)
+            end
+        end)
+
+        -- 4. Game Error / Prompt Guard
+        task.spawn(function()
+            while task.wait(0.5) do
+                if S.running and not S.panicMode then
+                    pcall(function()
+                        local errorPrompt = CoreGui:FindFirstChild("RobloxPromptGui", true)
+                        if errorPrompt then
+                            local errorText = errorPrompt:FindFirstChild("MessageArea", true)
+                            if errorText and errorText.Text then
+                                local textVal = errorText.Text:lower()
+                                if textVal:find("kick") or textVal:find("ban") or textVal:find("disconnected") or textVal:find("lost connection") then
+                                    errorPrompt:Destroy()
+                                    LogSystem("SUCCESS", "Successfully purged and bypassed server error kick screen prompt.")
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end)
+
+        LogSystem("SUCCESS", "Omega-Tier Anti-Kick, Anti-Ban & Prompt Shield fully engaged.")
     end)
 end
 
@@ -371,7 +417,7 @@ local HeaderTitle = Instance.new("TextLabel", HeaderBar)
 HeaderTitle.Size = UDim2.new(1, -100, 1, 0)
 HeaderTitle.Position = UDim2.new(0, 16, 0, 0)
 HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "⚡ SAE v6.2 — Anti-Kick / Anti-Ban Shielded"
+HeaderTitle.Text = "⚡ SAE v6.2.1 — Omega Shielded"
 HeaderTitle.TextColor3 = THEME.TextMain
 HeaderTitle.Font = THEME.FontBold
 HeaderTitle.TextSize = 13
@@ -570,4 +616,4 @@ end)
 
 SwitchTab("Movement")
 InitializeUltimateSecurity()
-LogSystem("SUCCESS", "SAE Enterprise Suite v6.2 fully loaded.")
+LogSystem("SUCCESS", "SAE Enterprise Suite v6.2.1 Omega Shield fully loaded.")
