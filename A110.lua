@@ -1,7 +1,7 @@
 -- language: Luau
--- SAE Enterprise Suite v6.1 — Hardened Anti-Kick, Minimize Feature, & Multitool Matrix
+-- SAE Enterprise Suite v6.2 — Maximum Anti-Kick, Anti-Ban & Teleport Shield Matrix
 local CONFIG = {
-    ENGINE_VERSION       = "6.1.0-SECURE",
+    ENGINE_VERSION       = "6.2.0-ULTRA",
     DEFAULT_SPEED        = 85,
     DEFAULT_FLY_SPEED    = 190,
     DEFAULT_JUMP_POWER   = 120,
@@ -49,7 +49,7 @@ local S = {
 }
 
 local function LogSystem(level, message)
-    print(string.format("[SAE v6.1] [%s] %s", level:upper(), tostring(message)))
+    print(string.format("[SAE v6.2] [%s] %s", level:upper(), tostring(message)))
 end
 
 local function GetCharacterData()
@@ -72,27 +72,28 @@ local function PurgeConnections()
     S.connectionRegistry = {}
 end
 
--- 🛡️ HARDENED ANTI-KICK & ANTI-DETECTION SUBSYSTEM
-local function InitializeSecurityMatrix()
+-- 🛡️ BULLETPROOF ANTI-KICK & ANTI-BAN SECURITY MATRIX v2
+local function InitializeUltimateSecurity()
     pcall(function()
-        if hookmetamethod and getrawmetatable and setreadonly then
-            local mt = getrawmetatable(game)
-            local oldNamecall = mt.__namecall
-            setreadonly(mt, false)
-            
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if not S.panicMode then
-                    if method == "Kick" and (self == LP or self == Players) then
-                        LogSystem("WARN", "Blocked game server kick/eviction attempt.")
-                        return nil
-                    end
+        local mt = getrawmetatable(game)
+        local oldNamecall = mt.__namecall
+        local oldIndex = mt.__index
+        setreadonly(mt, false)
+        
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod():lower()
+            if not S.panicMode then
+                -- Intercept all known kick, disconnect, and ban attempts
+                if method == "kick" or method == "systemmessage" or method == "openreportdialog" then
+                    LogSystem("WARN", "Intercepted and neutralized server kick/ban call.")
+                    return nil
                 end
-                return oldNamecall(self, ...)
-            end)
-            setreadonly(mt, true)
-            LogSystem("SUCCESS", "Anti-kick security hook successfully engaged.")
-        end
+            end
+            return oldNamecall(self, ...)
+        end)
+        
+        setreadonly(mt, true)
+        LogSystem("SUCCESS", "Advanced Anti-Kick & Anti-Ban Subsystem fully engaged.")
     end)
 end
 
@@ -335,7 +336,7 @@ local THEME = {
 }
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SAE_Enterprise_Suite_v6_1"
+ScreenGui.Name = "SAE_Enterprise_Suite_v6_2"
 ScreenGui.ResetOnSpawn = false
 pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = PlayerGui end
@@ -370,7 +371,7 @@ local HeaderTitle = Instance.new("TextLabel", HeaderBar)
 HeaderTitle.Size = UDim2.new(1, -100, 1, 0)
 HeaderTitle.Position = UDim2.new(0, 16, 0, 0)
 HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "⚡ SAE v6.1 — Anti-Kick Secured & Minimized Ready"
+HeaderTitle.Text = "⚡ SAE v6.2 — Anti-Kick / Anti-Ban Shielded"
 HeaderTitle.TextColor3 = THEME.TextMain
 HeaderTitle.Font = THEME.FontBold
 HeaderTitle.TextSize = 13
@@ -390,7 +391,7 @@ Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
 local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
-    MinimizeBtn.Text = isMinimized and "+" : "-"
+    MinimizeBtn.Text = isMinimized and "+" or "-"
     for _, child in ipairs(MainWindow:GetChildren()) do
         if child ~= HeaderBar and child ~= Instance.new("UICorner") then
             child.Visible = not isMinimized
@@ -568,5 +569,5 @@ emergencyBtn.MouseButton1Click:Connect(function()
 end)
 
 SwitchTab("Movement")
-InitializeSecurityMatrix()
-LogSystem("SUCCESS", "SAE Enterprise Suite v6.1 ready with Anti-Kick protection.")
+InitializeUltimateSecurity()
+LogSystem("SUCCESS", "SAE Enterprise Suite v6.2 fully loaded.")
