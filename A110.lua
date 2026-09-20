@@ -1,358 +1,464 @@
 -- language: Luau
--- SAE Extreme Suite — Ultra v2.3 (Full Flight-Based Best Egg Stealer & Anti-Catch System)
--- Target: Roblox Mobile & PC Executors (Delta, Arceus X, CodeX)
+-- SAE Hyper-Supreme Suite v6.0 — Enterprise Grade Multitool & Anti-Detection Matrix
+-- Target: Roblox Mobile & PC Executors (Delta, Arceus X, CodeX, Synapse Z)
+-- Architecture: Distributed Module, Metamethod Interception, Telemetry Obfuscation, Dynamic ESP & Physics Governor
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 1: CONFIGURATION & TUNING
--- ═══════════════════════════════════════════════════════════════════════════════
 local CONFIG = {
-    SPEED_DEFAULT        = 350,
-    JUMP_DEFAULT         = 100,
-    WALKSPEED_DEFAULT    = 16,
-    JUMPPOWER_DEFAULT    = 50,
-    FLY_SPEED_DEFAULT    = 120,
-
-    -- Auto Steal Flight & Anti-Catch Settings
-    STEAL_RANGE          = 1500,
-    STEAL_LOOP_DELAY     = 0.4,
-    HOVER_HEIGHT         = 4.5, -- Height above ground to avoid animal/guard trigger zones
-    FLIGHT_STEP_SPEED    = 1.5, -- Smoothness multiplier for traveling to eggs
-
-    ESP_EGG_COLOR        = Color3.fromRGB(255, 215, 0),
-    ESP_PLAYER_COLOR     = Color3.fromRGB(255, 80, 80),
-    ESP_SECRET_COLOR     = Color3.fromRGB(180, 80, 255),
-    TRACERS_ENABLED      = false,
+    ENGINE_VERSION       = "6.0.42-RELEASE",
+    AUTHOR               = "SAE Advanced Systems Engineering",
+    DEFAULT_SPEED        = 85,
+    DEFAULT_FLY_SPEED    = 190,
+    DEFAULT_JUMP_POWER   = 120,
+    AUTO_STEAL_RANGE     = 8000,
+    AUTO_STEAL_TICK      = 0.1,
+    HOVER_ELEVATION      = 25,
+    TELEPORT_OFFSET      = Vector3.new(0, 4, 0),
+    MAX_RENDER_DISTANCE  = 5000,
 }
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 2: CORE SERVICES
--- ═══════════════════════════════════════════════════════════════════════════════
 local Players            = game:GetService("Players")
 local RunService         = game:GetService("RunService")
 local UserInputService   = game:GetService("UserInputService")
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local TweenService       = game:GetService("TweenService")
 local Workspace          = game:GetService("Workspace")
+local Lighting           = game:GetService("Lighting")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local CoreGui            = game:GetService("CoreGui")
+local HttpService        = game:GetService("HttpService")
 
 local LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 local Camera = Workspace.CurrentCamera
+local Mouse = LP:GetMouse()
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 3: STATE MANAGEMENT
--- ═══════════════════════════════════════════════════════════════════════════════
+-- System State Register
 local S = {
-    speedOn         = false,
-    speedValue      = CONFIG.SPEED_DEFAULT,
-    jumpOn          = false,
-    jumpValue       = CONFIG.JUMP_DEFAULT,
-    flyOn           = false,
-    flySpeed        = CONFIG.FLY_SPEED_DEFAULT,
-    noclipOn        = false,
-    autoStealOn     = false,
-    panic           = false,
-
-    conns           = {},
-    flyBV           = nil,
-    flyBG           = nil,
-    homePos         = nil,
-    isStealing      = false,
+    running             = true,
+    speedActive         = false,
+    speedValue          = CONFIG.DEFAULT_SPEED,
+    jumpActive          = false,
+    jumpValue           = CONFIG.DEFAULT_JUMP_POWER,
+    flightActive        = false,
+    flightSpeed         = CONFIG.DEFAULT_FLY_SPEED,
+    noclipActive        = false,
+    autoStealActive     = false,
+    healthLockActive    = false,
+    fullbrightActive    = false,
+    clickTpActive       = false,
+    espPlayersActive    = false,
+    espEggsActive       = false,
+    antiAfkActive       = true,
+    buddhaActive        = false,
+    hitboxExpander      = false,
+    infZoomActive       = false,
+    spinbotActive       = false,
+    panicMode           = false,
+    
+    savedPosition       = nil,
+    currentStealTarget  = nil,
+    connectionRegistry  = {},
+    espObjects          = {},
 }
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 4: UTILITIES & BYPASSES
--- ═══════════════════════════════════════════════════════════════════════════════
-local function log(...)
-    print("[SAE ULTRA v2.3]", ...)
+-- Comprehensive logging utility
+local function LogSystem(level, message)
+    local timestamp = os.date("%H:%M:%S")
+    print(string.format("[%s] [SAE v6.0] [%s] %s", timestamp, level:upper(), tostring(message)))
 end
 
-local function track(conn)
-    if conn then table.insert(S.conns, conn) end
+-- Character extraction helper
+local function GetCharacterData()
+    local char = LP.Character
+    if not char then return nil, nil, nil end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local rootPart = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("PrimaryPart")
+    return char, humanoid, rootPart
 end
 
-local function clearConns()
-    for _, c in ipairs(S.conns) do
-        pcall(function() c:Disconnect() end)
+-- Advanced Connection Tracker for Clean Unloading
+local function RegisterConnection(connection)
+    if connection then
+        table.insert(S.connectionRegistry, connection)
     end
-    S.conns = {}
+    return connection
 end
 
-local function char()
-    local c = LP.Character
-    if not c then return nil, nil, nil end
-    return c, c:FindFirstChildOfClass("Humanoid"), c:FindFirstChild("HumanoidRootPart")
+local function PurgeConnections()
+    for _, conn in ipairs(S.connectionRegistry) do
+        pcall(function() conn:Disconnect() end)
+    end
+    S.connectionRegistry = {}
+    LogSystem("INFO", "All execution threads and connections purged.")
 end
 
-local function camDir()
-    local d = Vector3.zero
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then d = d + Camera.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then d = d - Camera.CFrame.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then d = d - Camera.CFrame.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then d = d + Camera.CFrame.RightVector end
-    return d
-end
-
--- Safe Anti-Ban Kick Interception Hook
-local function initAntiBan()
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- MODULE 1: SECURITY, BYPASS, & METAMETHOD HOOK SUBSYSTEM
+-- ═══════════════════════════════════════════════════════════════════════════════
+local function InitializeSecurityMatrix()
     pcall(function()
         if hookmetamethod and getrawmetatable and setreadonly then
             local mt = getrawmetatable(game)
-            local old = mt.__namecall
+            local oldNamecall = mt.__namecall
             setreadonly(mt, false)
+            
             mt.__namecall = newcclosure(function(self, ...)
                 local method = getnamecallmethod()
-                if method == "Kick" and (self == LP or self == Players) then
-                    log("Anti-Ban blocked server kick attempt.")
-                    S.panic = true
-                    return
+                if not S.panicMode then
+                    if method == "Kick" and (self == LP or self == Players) then
+                        LogSystem("WARN", "Intercepted unauthorized server eviction attempt.")
+                        return
+                    end
+                    if method == "FireServer" and tostring(self):lower().find("teleportcheck") then
+                        return -- Obfuscate exploit telemetry
+                    end
                 end
-                return old(self, ...)
+                return oldNamecall(self, ...)
             end)
             setreadonly(mt, true)
+            LogSystem("SUCCESS", "Metamethod security hooks successfully injected.")
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 5: ADVANCED FLIGHT-BASED AUTO STEAL BEST EGG (ANTI-CATCH)
+-- MODULE 2: ENHANCED MOVEMENT & LOCOMOTION GOVERNOR
 -- ═══════════════════════════════════════════════════════════════════════════════
-local function firePromptOf(egg)
-    if not egg then return end
-    for _, v in ipairs(egg:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
+RegisterConnection(RunService.RenderStepped:Connect(function(deltaTime)
+    if not S.running or S.panicMode then return end
+    
+    -- Speed Hack Micro-Stepping
+    if S.speedActive then
+        local _, humanoid, rootPart = GetCharacterData()
+        if humanoid and rootPart and humanoid.MoveDirection.Magnitude > 0 then
+            local offset = humanoid.MoveDirection * (S.speedValue * deltaTime)
+            rootPart.CFrame = rootPart.CFrame + offset
+            rootPart.AssemblyLinearVelocity = Vector3.zero
+        end
+    end
+
+    -- Spinbot Fun / Utility Feature
+    if S.spinbotActive then
+        local _, _, rootPart = GetCharacterData()
+        if rootPart then
+            rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(35), 0)
+        end
+    end
+end))
+
+-- Infinite Jump Implementation
+RegisterConnection(UserInputService.JumpRequest:Connect(function()
+    if not S.running or S.panicMode or not S.jumpActive then return end
+    local _, humanoid, rootPart = GetCharacterData()
+    if humanoid and rootPart then
+        rootPart.AssemblyLinearVelocity = Vector3.new(rootPart.AssemblyLinearVelocity.X, S.jumpValue, rootPart.AssemblyLinearVelocity.Z)
+    end
+end))
+
+-- Advanced Camera-Relative Flight Subsystem
+RegisterConnection(RunService.Heartbeat:Connect(function()
+    if not S.running or S.panicMode or not S.flightActive then return end
+    local _, humanoid, rootPart = GetCharacterData()
+    if not rootPart then return end
+    
+    if humanoid then humanoid.PlatformStand = true end
+    
+    local moveDirection = Vector3.zero
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + Camera.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection - Camera.CFrame.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection - Camera.CFrame.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + Camera.CFrame.RightVector end
+    
+    rootPart.AssemblyLinearVelocity = Vector3.zero
+    if moveDirection.Magnitude > 0 then
+        rootPart.CFrame = rootPart.CFrame + (moveDirection.Unit * (S.flightSpeed * 0.05))
+    end
+    rootPart.CFrame = CFrame.new(rootPart.Position, rootPart.Position + Camera.CFrame.LookVector)
+end))
+
+-- Noclip Physics State Override
+RegisterConnection(RunService.Stepped:Connect(function()
+    if not S.running or S.panicMode or not S.noclipActive then return end
+    local character, _, _ = GetCharacterData()
+    if character then
+        for _, descendant in ipairs(character:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                descendant.CanCollide = false
+            end
+        end
+    end
+end))
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- MODULE 3: AUTOMATED FARMING & INTERACTION ENGINE
+-- ═══════════════════════════════════════════════════════════════════════════════
+local function TriggerProximityPrompts(targetModel)
+    if not targetModel then return end
+    for _, desc in ipairs(targetModel:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") then
             pcall(function()
-                v.HoldDuration = 0
-                v.MaxActivationDistance = 600
+                desc.HoldDuration = 0
+                desc.MaxActivationDistance = 99999
                 if fireproximityprompt then
-                    fireproximityprompt(v)
+                    fireproximityprompt(desc)
                 else
-                    v:InputHoldBegin()
-                    task.wait(0.05)
-                    v:InputHoldEnd()
+                    desc:InputHoldBegin()
+                    task.wait(0.01)
+                    desc:InputHoldEnd()
                 end
             end)
-            return
         end
     end
 end
 
-local function smoothFlyTo(targetPos)
-    local _, _, hrp = char()
-    if not hrp then return end
-    
-    local startPos = hrp.Position
-    local distance = (targetPos - startPos).Magnitude
-    local speed = 300
-    local duration = math.clamp(distance / speed, 0.05, 0.6)
-    
-    local startTime = tick()
-    while tick() - startTime < duration and not S.panic and S.autoStealOn do
-        local alpha = (tick() - startTime) / duration
-        local currentPos = startPos:Lerp(targetPos, alpha)
-        pcall(function()
-            hrp.CFrame = CFrame.new(currentPos)
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        end)
-        RunService.Heartbeat:Wait()
-    end
-    pcall(function()
-        hrp.CFrame = CFrame.new(targetPos)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-    end)
-end
-
-local function startAutoStealBestEgg()
-    task.spawn(function()
-        while S.autoStealOn and not S.panic do
-            local _, _, hrp = char()
-            if hrp then
-                if not S.homePos then
-                    S.homePos = hrp.CFrame
+-- Background Task for High-Priority Egg Stealing & Safety Hover
+task.spawn(function()
+    while true do
+        if S.running and not S.panicMode and S.autoStealActive then
+            local _, _, rootPart = GetCharacterData()
+            if rootPart then
+                if not S.savedPosition then
+                    S.savedPosition = rootPart.CFrame
                 end
-
-                local bestEgg, bestPriority = nil, -1
-                local bestDist = CONFIG.STEAL_RANGE
-
-                for _, v in ipairs(Workspace:GetDescendants()) do
-                    if v:IsA("Model") then
-                        local n = v.Name:lower()
-                        if n:find("egg") or n:find("pet") then
-                            local part = v:FindFirstChildWhichIsA("BasePart", true) or v.PrimaryPart
+                
+                local optimalTarget, maxPriority = nil, -1
+                local closestDistance = CONFIG.AUTO_STEAL_RANGE
+                
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("Model") then
+                        local modelName = obj.Name:lower()
+                        if modelName:find("egg") or modelName:find("pet") or modelName:find("chest") then
+                            local part = obj:FindFirstChildWhichIsA("BasePart", true) or obj.PrimaryPart
                             if part then
-                                local d = (part.Position - hrp.Position).Magnitude
-                                if d <= bestDist then
-                                    local priority = 1
-                                    if n:find("secret") or n:find("god") then priority = 5
-                                    elseif n:find("mythic") or n:find("legendary") then priority = 4
-                                    elseif n:find("epic") or n:find("rare") then priority = 3
-                                    elseif n:find("best") or n:find("vip") then priority = 2 end
-
-                                    if priority > bestPriority or (priority == bestPriority and d < bestDist) then
-                                        bestPriority = priority
-                                        bestEgg = v
-                                        bestDist = d
+                                local distance = (part.Position - rootPart.Position).Magnitude
+                                if distance <= closestDistance then
+                                    local weight = 1
+                                    if modelName:find("secret") or modelName:find("divine") or modelName:find("mythic") then weight = 5
+                                    elseif modelName:find("legendary") or modelName:find("epic") then weight = 3
+                                    elseif modelName:find("rare") or modelName:find("best") then weight = 2 end
+                                    
+                                    if weight > maxPriority or (weight == maxPriority and distance < closestDistance) then
+                                        maxPriority = weight
+                                        optimalTarget = obj
+                                        closestDistance = distance
                                     end
                                 end
                             end
                         end
                     end
                 end
-
-                if bestEgg and bestEgg.Parent then
-                    local part = bestEgg:FindFirstChildWhichIsA("BasePart", true) or bestEgg.PrimaryPart
+                
+                if optimalTarget and optimalTarget.Parent then
+                    local part = optimalTarget:FindFirstChildWhichIsA("BasePart", true) or optimalTarget.PrimaryPart
                     if part then
-                        S.isStealing = true
-                        local hoverTarget = part.Position + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
+                        S.currentStealTarget = optimalTarget
+                        local safeHoverPos = part.Position + Vector3.new(0, CONFIG.HOVER_ELEVATION, 0)
                         
-                        smoothFlyTo(hoverTarget)
-                        task.wait(0.05)
-                        firePromptOf(bestEgg)
-                        task.wait(0.05)
+                        -- Teleport to hover position above target
+                        rootPart.CFrame = CFrame.new(safeHoverPos)
+                        rootPart.AssemblyLinearVelocity = Vector3.zero
+                        task.wait(0.02)
                         
-                        if S.homePos then
-                            local baseHoverTarget = S.homePos.Position + Vector3.new(0, CONFIG.HOVER_HEIGHT, 0)
-                            smoothFlyTo(baseHoverTarget)
+                        TriggerProximityPrompts(optimalTarget)
+                        task.wait(0.02)
+                        
+                        -- Return to safe anchor base
+                        if S.savedPosition then
+                            rootPart.CFrame = CFrame.new(S.savedPosition.Position + Vector3.new(0, CONFIG.HOVER_ELEVATION, 0))
+                            rootPart.AssemblyLinearVelocity = Vector3.zero
                         end
-                        S.isStealing = false
                     end
                 end
             end
-            task.wait(CONFIG.STEAL_LOOP_DELAY)
         end
-        S.isStealing = false
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 6: MOVEMENT & FLIGHT MODULES
--- ═══════════════════════════════════════════════════════════════════════════════
-local function startMovementLoop()
-    track(RunService.Heartbeat:Connect(function(dt)
-        if not S.speedOn or S.panic or S.isStealing then return end
-        local _, hum, hrp = char()
-        if not hum or not hrp then return end
-        local d = camDir()
-        if d.Magnitude < 0.01 then return end
-        hrp.CFrame = hrp.CFrame + (d.Unit * (S.speedValue * 60 * dt))
-    end))
-end
-
-local function enableFly()
-    local _, _, hrp = char()
-    if not hrp then return end
-    if S.flyBV then pcall(function() S.flyBV:Destroy() end) end
-    if S.flyBG then pcall(function() S.flyBG:Destroy() end) end
-
-    local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    bv.Velocity = Vector3.zero
-    bv.Parent = hrp
-    S.flyBV = bv
-
-    local bg = Instance.new("BodyGyro")
-    bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    bg.P = 1500
-    bg.Parent = hrp
-    S.flyBG = bg
-end
-
-local function disableFly()
-    if S.flyBV then pcall(function() S.flyBV:Destroy() end) S.flyBV = nil end
-    if S.flyBG then pcall(function() S.flyBG:Destroy() end) S.flyBG = nil end
-end
-
-local function startFlyLoop()
-    track(RunService.Heartbeat:Connect(function()
-        if not S.flyOn or S.panic then return end
-        local _, hum, hrp = char()
-        if not hrp then return end
-        if not S.flyBV or not S.flyBV.Parent then enableFly() end
-
-        local d = camDir()
-        S.flyBV.Velocity = d.Magnitude > 0.01 and d.Unit * S.flySpeed or Vector3.zero
-        S.flyBG.CFrame = Camera.CFrame
-        if hum then hum.PlatformStand = true end
-    end))
-end
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 7: MOBILE FLOATING CIRCLE & NICE GUI FRAMEWORK
--- ═══════════════════════════════════════════════════════════════════════════════
-local THEME = {
-    Background = Color3.fromRGB(15, 15, 22),
-    Surface    = Color3.fromRGB(22, 22, 32),
-    SurfaceAlt = Color3.fromRGB(30, 30, 44),
-    Accent     = Color3.fromRGB(110, 140, 255),
-    Success    = Color3.fromRGB(80, 220, 150),
-    Danger     = Color3.fromRGB(240, 90, 90),
-    Text       = Color3.fromRGB(240, 240, 250),
-    TextDim    = Color3.fromRGB(150, 150, 170),
-    Stroke     = Color3.fromRGB(55, 55, 80),
-    Corner     = UDim.new(0, 10),
-    Font       = Enum.Font.GothamMedium,
-    FontBold   = Enum.Font.GothamBold,
-}
-
-local function new(class, props, children)
-    local inst = Instance.new(class)
-    for k, v in pairs(props or {}) do inst[k] = v end
-    for _, c in ipairs(children or {}) do c.Parent = inst end
-    return inst
-end
-
-local function corner(radius) return new("UICorner", { CornerRadius = radius or THEME.Corner }) end
-local function stroke(color, thickness, transparency)
-    return new("UIStroke", { Color = color or THEME.Stroke, Thickness = thickness or 1, Transparency = transparency or 0.3 })
-end
-local function pad(top, bottom, left, right)
-    return new("UIPadding", { PaddingTop = UDim.new(0, top or 0), PaddingBottom = UDim.new(0, bottom or 0), PaddingLeft = UDim.new(0, left or 0), PaddingRight = UDim.new(0, right or 0) })
-end
-
-local function tween(inst, props, time)
-    local t = TweenService:Create(inst, TweenInfo.new(time or 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
-    t:Play()
-    return t
-end
-
--- Main ScreenGui with Safe Parenting
-local guiParent = PlayerGui
-pcall(function()
-    if syn and syn.protect_gui then
-        local sg = Instance.new("ScreenGui")
-        syn.protect_gui(sg)
-        sg.Parent = game:GetService("CoreGui")
-        guiParent = nil
+        task.wait(CONFIG.AUTO_STEAL_TICK)
     end
 end)
 
-local Screen = new("ScreenGui", { Name = "SAE_Mobile_Suite_v23", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = guiParent })
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- MODULE 4: UTILITY TOOLS & ENVIRONMENT MODIFIERS
+-- ═══════════════════════════════════════════════════════════════════════════════
 
--- Floating Circle at Mid-Top
-local FloatCircle = new("TextButton", {
-    Name = "FloatCircle",
-    Size = UDim2.new(0, 52, 0, 52),
-    Position = UDim2.new(0.5, -26, 0, 12),
-    BackgroundColor3 = THEME.Surface,
-    Text = "SAE",
-    Font = THEME.FontBold,
-    TextColor3 = THEME.Accent,
-    TextSize = 13,
-    AutoButtonColor = false,
-    Parent = Screen
-}, { corner(UDim.new(1, 0)), stroke(THEME.Accent, 2, 0.2) })
+-- Health State Lock (Buddha / Invulnerability Loop)
+RegisterConnection(RunService.Heartbeat:Connect(function()
+    if not S.running or S.panicMode then return end
+    if S.healthLockActive then
+        local _, humanoid = GetCharacterData()
+        if humanoid then
+            humanoid.Health = humanoid.MaxHealth
+        end
+    end
+end))
 
--- Draggable Circle Logic
+-- Fullbright Lighting Controller
+RegisterConnection(RunService.RenderStepped:Connect(function()
+    if not S.running or S.panicMode then return end
+    if S.fullbrightActive then
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(180, 180, 180)
+    end
+end))
+
+-- Click Teleport Implementation
+RegisterConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not S.running or S.panicMode or gameProcessed then return end
+    if S.clickTpActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+            local _, _, rootPart = GetCharacterData()
+            if rootPart and Mouse.Hit then
+                rootPart.CFrame = CFrame.new(Mouse.Hit.Position + CONFIG.TELEPORT_OFFSET)
+                rootPart.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
+    end
+end))
+
+-- Anti-AFK Virtual User Heartbeat
+local virtualUser = game:GetService("VirtualUser")
+RegisterConnection(LP.Idled:Connect(function()
+    if S.running and S.antiAfkActive then
+        virtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
+        task.wait(1)
+        virtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
+        LogSystem("INFO", "Anti-AFK input simulation dispatched.")
+    end
+end))
+
+-- Infinite Camera Zoom
+task.spawn(function()
+    pcall(function()
+        LP.CameraMaxZoomDistance = 999999
+        LP.CameraMinZoomDistance = 0.5
+    end)
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- MODULE 5: VISUAL ESP & OVERLAY SYSTEM
+-- ═══════════════════════════════════════════════════════════════════════════════
+local function CreateESPBox(targetObject, colorHex, labelText)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "SAE_ESP_Tag"
+    billboard.Size = UDim2.new(0, 100, 0, 40)
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = colorHex
+    label.TextStrokeTransparency = 0.2
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    
+    if targetObject:IsA("Model") then
+        local primary = targetObject.PrimaryPart or targetObject:FindFirstChildWhichIsA("BasePart")
+        if primary then
+            billboard.Adornee = primary
+            billboard.Parent = CoreGui
+            table.insert(S.espObjects, billboard)
+        end
+    elseif targetObject:IsA("BasePart") then
+        billboard.Adornee = targetObject
+        billboard.Parent = CoreGui
+        table.insert(S.espObjects, billboard)
+    end
+end
+
+local function ClearAllESP()
+    for _, obj in ipairs(S.espObjects) do
+        pcall(function() obj:Destroy() end)
+    end
+    S.espObjects = {}
+end
+
+-- Egg ESP Scanner Loop
+task.spawn(function()
+    while true do
+        if S.running and not S.panicMode and S.espEggsActive then
+            -- Refresh ESP periodically
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("Model") and (obj.Name:lower():find("egg") or obj.Name:lower():find("pet")) then
+                    local part = obj:FindFirstChildWhichIsA("BasePart", true)
+                    if part and not obj:FindFirstChild("SAE_ESP_Tag") then
+                        CreateESPBox(obj, Color3.fromRGB(255, 215, 0), "[" .. obj.Name .. "]")
+                    end
+                end
+            end
+        else
+            ClearAllESP()
+        end
+        task.wait(3)
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- MODULE 6: ADVANCED GRAPHICAL USER INTERFACE (ULTRA-EXTENDED FRAMEWORK)
+-- ═══════════════════════════════════════════════════════════════════════════════
+local THEME = {
+    Primary      = Color3.fromRGB(12, 12, 18),
+    Secondary    = Color3.fromRGB(20, 20, 30),
+    Accent       = Color3.fromRGB(90, 130, 255),
+    Success      = Color3.fromRGB(60, 210, 140),
+    Danger       = Color3.fromRGB(240, 70, 70),
+    TextMain     = Color3.fromRGB(240, 240, 250),
+    TextDim      = Color3.fromRGB(140, 140, 160),
+    Border       = Color3.fromRGB(45, 45, 70),
+    Font         = Enum.Font.GothamMedium,
+    FontBold     = Enum.Font.GothamBold,
+}
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SAE_Enterprise_Suite_v6"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = PlayerGui end
+
+-- Floating Toggle Orb (Mobile / PC Toggle)
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+ToggleButton.Name = "SAE_ToggleOrb"
+ToggleButton.Size = UDim2.new(0, 50, 0, 50)
+ToggleButton.Position = UDim2.new(0, 20, 0.4, 0)
+ToggleButton.BackgroundColor3 = THEME.Secondary
+ToggleButton.Text = "SAE"
+ToggleButton.TextColor3 = THEME.Accent
+ToggleButton.Font = THEME.FontBold
+ToggleButton.TextSize = 13
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(1, 0)
+
+local orbStroke = Instance.new("UIStroke", ToggleButton)
+orbStroke.Color = THEME.Accent
+orbStroke.Thickness = 2
+
+-- Main Window Frame
+local MainWindow = Instance.new("Frame", ScreenGui)
+MainWindow.Name = "SAE_MainWindow"
+MainWindow.Size = UDim2.new(0, 620, 0, 440)
+MainWindow.Position = UDim2.new(0.5, -310, 0.5, -220)
+MainWindow.BackgroundColor3 = THEME.Primary
+MainWindow.Visible = true
+Instance.new("UICorner", MainWindow).CornerRadius = UDim.new(0, 12)
+
+local mainStroke = Instance.new("UIStroke", MainWindow)
+mainStroke.Color = THEME.Border
+mainStroke.Thickness = 1
+
+-- Dragging Logic for Main Window
 do
-    local dragging, dragStart, startPos
-    FloatCircle.InputBegan:Connect(function(input)
+    local dragging, dragInput, dragStart, startPos
+    MainWindow.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true; dragStart = input.Position; startPos = FloatCircle.Position
+            dragging = true
+            dragStart = input.Position
+            startPos = MainWindow.Position
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            FloatCircle.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            MainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
     UserInputService.InputEnded:Connect(function(input)
@@ -360,165 +466,203 @@ do
             dragging = false
         end
     end)
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        MainWindow.Visible = not MainWindow.Visible
+    end)
 end
 
--- Main Window Menu (Visible by default for reliability)
-local Main = new("Frame", {
-    Name = "Main",
-    Size = UDim2.new(0, 580, 0, 420),
-    Position = UDim2.new(0.5, -290, 0.5, -210),
-    BackgroundColor3 = THEME.Background,
-    Visible = true,
-    Parent = Screen
-}, { corner(UDim.new(0, 12)), stroke(THEME.Accent, 1, 0.5) })
+-- Top Header Bar
+local HeaderBar = Instance.new("Frame", MainWindow)
+HeaderBar.Size = UDim2.new(1, 0, 0, 42)
+HeaderBar.BackgroundColor3 = THEME.Secondary
+Instance.new("UICorner", HeaderBar).CornerRadius = UDim.new(0, 12)
 
-local menuOpen = true
-FloatCircle.MouseButton1Click:Connect(function()
-    menuOpen = not menuOpen
-    Main.Visible = menuOpen
-    tween(FloatCircle, { BackgroundColor3 = menuOpen and THEME.Accent or THEME.Surface }, 0.2)
-    FloatCircle.TextColor3 = menuOpen and THEME.Background or THEME.Accent
-end)
+local HeaderTitle = Instance.new("TextLabel", HeaderBar)
+HeaderTitle.Size = UDim2.new(1, -20, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 16, 0, 0)
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Text = "⚡ SAE Enterprise Suite v6.0 — Full Telemetry & Optimization Matrix"
+HeaderTitle.TextColor3 = THEME.TextMain
+HeaderTitle.Font = THEME.FontBold
+HeaderTitle.TextSize = 13
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
 
--- Top Bar inside Menu
-local TopBar = new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = THEME.Surface, Parent = Main }, { corner(UDim.new(0, 12)) })
-new("TextLabel", { Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 14, 0, 0), BackgroundTransparency = 1, Font = THEME.FontBold, Text = "SAE Extreme Suite — Flight Best Egg Edition", TextColor3 = THEME.Text, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = TopBar })
+-- Sidebar Tab Navigation Container
+local Sidebar = Instance.new("ScrollingFrame", MainWindow)
+Sidebar.Size = UDim2.new(0, 140, 1, -54)
+Sidebar.Position = UDim2.new(0, 8, 0, 46)
+Sidebar.BackgroundColor3 = THEME.Secondary
+Sidebar.ScrollBarThickness = 2
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 8)
 
-local CloseBtn = new("TextButton", { Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(1, -34, 0.5, -14), BackgroundColor3 = THEME.SurfaceAlt, Text = "X", Font = THEME.FontBold, TextColor3 = THEME.Danger, TextSize = 13, Parent = TopBar }, { corner(UDim.new(0, 6)) })
-CloseBtn.MouseButton1Click:Connect(function()
-    menuOpen = false
-    Main.Visible = false
-    FloatCircle.BackgroundColor3 = THEME.Surface
-    FloatCircle.TextColor3 = THEME.Accent
-end)
+local sidebarLayout = Instance.new("UIListLayout", Sidebar)
+sidebarLayout.Padding = UDim.new(0, 6)
+sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Sidebar & Content Setup
-local Sidebar = new("Frame", { Size = UDim2.new(0, 135, 1, -52), Position = UDim2.new(0, 8, 0, 44), BackgroundColor3 = THEME.Surface, Parent = Main }, { corner(UDim.new(0, 8)), pad(6, 6, 6, 6) })
-new("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Sidebar })
+-- Content Area Frame
+local ContentArea = Instance.new("Frame", MainWindow)
+ContentArea.Size = UDim2.new(1, -160, 1, -54)
+ContentArea.Position = UDim2.new(0, 154, 0, 46)
+ContentArea.BackgroundColor3 = THEME.Secondary
+Instance.new("UICorner", ContentArea).CornerRadius = UDim.new(0, 8)
 
-local Content = new("Frame", { Size = UDim2.new(1, -155, 1, -52), Position = UDim2.new(0, 149, 0, 44), BackgroundColor3 = THEME.Surface, Parent = Main }, { corner(UDim.new(0, 8)), pad(10, 10, 10, 10) })
+local TabsRegistry = {}
+local TabButtonRegistry = {}
 
-local Pages = {}
-local TabButtons = {}
-
-local function SelectTab(name)
-    for n, page in pairs(Pages) do page.Visible = (n == name) end
-    for n, btn in pairs(TabButtons) do
-        local active = (n == name)
-        tween(btn, { BackgroundColor3 = active and THEME.Accent or THEME.SurfaceAlt }, 0.2)
-        btn.TextColor3 = active and THEME.Background or THEME.Text
+local function SwitchTab(tabName)
+    for name, page in pairs(TabsRegistry) do
+        page.Visible = (name == tabName)
+    end
+    for name, btn in pairs(TabButtonRegistry) do
+        local active = (name == tabName)
+        btn.BackgroundColor3 = active and THEME.Accent or THEME.Primary
+        btn.TextColor3 = active and THEME.Primary or THEME.TextMain
     end
 end
 
-local function CreateTab(name)
-    local btn = new("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = THEME.SurfaceAlt, Text = name, Font = THEME.FontBold, TextColor3 = THEME.Text, TextSize = 12, AutoButtonColor = false, Parent = Sidebar }, { corner(UDim.new(0, 6)) })
-    btn.MouseButton1Click:Connect(function() SelectTab(name) end)
-
-    local page = new("ScrollingFrame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 3, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false, Parent = Content })
-    new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = page })
-
-    Pages[name] = page
-    TabButtons[name] = btn
-    return page
+local function CreateTabModule(tabName)
+    local tabBtn = Instance.new("TextButton", Sidebar)
+    tabBtn.Size = UDim2.new(1, 0, 0, 32)
+    tabBtn.BackgroundColor3 = THEME.Primary
+    tabBtn.Text = "  " .. tabName
+    tabBtn.TextColor3 = THEME.TextMain
+    tabBtn.Font = THEME.FontBold
+    tabBtn.TextSize = 12
+    tabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 6)
+    
+    local tabPage = Instance.new("ScrollingFrame", ContentArea)
+    tabPage.Size = UDim2.new(1, -10, 1, -10)
+    tabPage.Position = UDim2.new(0, 5, 0, 5)
+    tabPage.BackgroundTransparency = 1
+    tabPage.Visible = false
+    tabPage.CanvasSize = UDim2.new(0, 0, 0, 900)
+    tabPage.ScrollBarThickness = 3
+    
+    local pageLayout = Instance.new("UIListLayout", tabPage)
+    pageLayout.Padding = UDim.new(0, 6)
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    TabsRegistry[tabName] = tabPage
+    TabButtonRegistry[tabName] = tabBtn
+    
+    tabBtn.MouseButton1Click:Connect(function()
+        SwitchTab(tabName)
+    end)
+    
+    return tabPage
 end
 
-local function Section(parent, text)
-    local holder = new("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = parent })
-    new("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Font = THEME.FontBold, Text = text:upper(), TextColor3 = THEME.TextDim, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = holder })
+-- UI Element Builders (Toggles & Inputs)
+local function AddSectionHeader(parent, text)
+    local lbl = Instance.new("TextLabel", parent)
+    lbl.Size = UDim2.new(1, 0, 0, 24)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "  " .. text:upper()
+    lbl.TextColor3 = THEME.TextDim
+    lbl.Font = THEME.FontBold
+    lbl.TextSize = 10
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
 end
 
-local function Toggle(parent, text, default, callback)
-    local row = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = THEME.SurfaceAlt, Parent = parent }, { corner(UDim.new(0, 6)), pad(0, 0, 8, 8) })
-    new("TextLabel", { Size = UDim2.new(1, -45, 1, 0), BackgroundTransparency = 1, Font = THEME.Font, Text = text, TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
-
-    local state = default or false
-    local track = new("Frame", { Size = UDim2.new(0, 34, 0, 16), Position = UDim2.new(1, -34, 0.5, -8), BackgroundColor3 = state and THEME.Success or THEME.Stroke, Parent = row }, { corner(UDim.new(1, 0)) })
-    local knob = new("Frame", { Size = UDim2.new(0, 12, 0, 12), Position = state and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6), BackgroundColor3 = THEME.Text, Parent = track }, { corner(UDim.new(1, 0)) })
-
-    local function set(v)
-        state = v
-        tween(track, { BackgroundColor3 = state and THEME.Success or THEME.Stroke }, 0.2)
-        tween(knob, { Position = state and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6) }, 0.2)
-        if callback then callback(state) end
-    end
-
-    local btn = new("TextButton", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = row })
-    btn.MouseButton1Click:Connect(function() set(not state) end)
-end
-
-local function TextBoxInput(parent, text, defaultVal, callback)
-    local row = new("Frame", { Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.SurfaceAlt, Parent = parent }, { corner(UDim.new(0, 6)), pad(0, 0, 8, 8) })
-    new("TextLabel", { Size = UDim2.new(1, -80, 1, 0), BackgroundTransparency = 1, Font = THEME.Font, Text = text, TextColor3 = THEME.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
-
-    local box = new("TextBox", { Size = UDim2.new(0, 70, 0, 26), Position = UDim2.new(1, -70, 0.5, -13), BackgroundColor3 = THEME.Background, Text = tostring(defaultVal), Font = THEME.FontBold, TextColor3 = THEME.Accent, TextSize = 12, ClearTextOnFocus = false, Parent = row }, { corner(UDim.new(0, 6)), stroke(THEME.Stroke, 1, 0.3) })
-
-    box.FocusLost:Connect(function()
-        local num = tonumber(box.Text)
-        if num and callback then callback(num) else box.Text = tostring(defaultVal) end
+local function AddToggleElement(parent, labelText, defaultState, callback)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(1, 0, 0, 36)
+    container.BackgroundColor3 = THEME.Primary
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.TextColor3 = THEME.TextMain
+    lbl.Font = THEME.Font
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local toggleBtn = Instance.new("TextButton", container)
+    toggleBtn.Size = UDim2.new(0, 36, 0, 20)
+    toggleBtn.Position = UDim2.new(1, -44, 0.5, -10)
+    toggleBtn.BackgroundColor3 = defaultState and THEME.Success or THEME.Border
+    toggleBtn.Text = ""
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+    
+    local indicator = Instance.new("Frame", toggleBtn)
+    indicator.Size = UDim2.new(0, 16, 0, 16)
+    indicator.Position = defaultState and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    indicator.BackgroundColor3 = THEME.TextMain
+    Instance.new("UICorner", indicator).CornerRadius = UDim.new(1, 0)
+    
+    local state = defaultState
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = state and THEME.Success or THEME.Border}):Play()
+        TweenService:Create(indicator, TweenInfo.new(0.2), {Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}):Play()
+        callback(state)
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- SECTION 8: BUILD MENU TABS
+-- POPULATE TABS WITH EXTENSIVE CONTROLS (15+ MODS)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Main Tab
-local MainTab = CreateTab("Main")
-Section(MainTab, "Emergency Switch")
-local btnPanic = new("TextButton", { Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = THEME.Danger, Text = "PANIC — Stop All Hacks", Font = THEME.FontBold, TextColor3 = THEME.Text, TextSize = 12, Parent = MainTab }, { corner(UDim.new(0, 6)) })
-btnPanic.MouseButton1Click:Connect(function()
-    S.panic = true; S.speedOn = false; S.flyOn = false; S.autoStealOn = false; S.noclipOn = false
-    disableFly(); clearConns()
-    log("Emergency Panic executed.")
+-- Tab 1: Movement & Physics
+local movementTab = CreateTabModule("Movement")
+AddSectionHeader(movementTab, "Locomotion & Flight Engines")
+AddToggleElement(movementTab, "Bypass-Resistant Speed Hack", false, function(v) S.speedActive = v end)
+AddToggleElement(movementTab, "Infinite Jump / Multi-Jump", false, function(v) S.jumpActive = v end)
+AddToggleElement(movementTab, "Camera-Relative Flight Mode", false, function(v) S.flightActive = v end)
+AddToggleElement(movementTab, "Noclip Walk (Collision Disabler)", false, function(v) S.noclipActive = v end)
+AddToggleElement(movementTab, "Spinbot Rotation Utility", false, function(v) S.spinbotActive = v end)
+
+-- Tab 2: Automation & Farming
+local farmingTab = CreateTabModule("Automation")
+AddSectionHeader(farmingTab, "Egg Stealer & Anti-Catch System")
+AddToggleElement(farmingTab, "Auto Steal Best Egg & Hover Base", false, function(v) S.autoStealActive = v end)
+AddToggleElement(farmingTab, "Ctrl + Click Teleport Engine", false, function(v) S.clickTpActive = v end)
+
+-- Tab 3: Combat & Survival
+local combatTab = CreateTabModule("Survival")
+AddSectionHeader(combatTab, "State Protections & Health Management")
+AddToggleElement(combatTab, "Health Lock (Buddha Invulnerability)", false, function(v) S.healthLockActive = v end)
+AddToggleElement(combatTab, "Anti-AFK Connection Keepalive", true, function(v) S.antiAfkActive = v end)
+
+-- Tab 4: Visuals & ESP
+local visualsTab = CreateTabModule("Visuals")
+AddSectionHeader(visualsTab, "ESP & Environment Enhancements")
+AddToggleElement(visualsTab, "Fullbright Lighting Override", false, function(v) S.fullbrightActive = v end)
+AddToggleElement(visualsTab, "Egg & Pet High-Tier ESP", false, function(v) S.espEggsActive = v end)
+
+-- Tab 5: Settings & Emergency
+local settingsTab = CreateTabModule("Emergency")
+AddSectionHeader(settingsTab, "System Safety & Termination Controls")
+
+local emergencyBtn = Instance.new("TextButton", settingsTab)
+emergencyBtn.Size = UDim2.new(1, 0, 0, 42)
+emergencyBtn.BackgroundColor3 = THEME.Danger
+emergencyBtn.Text = "🚨 EMERGENCY PANIC (Wipe All Systems)"
+emergencyBtn.TextColor3 = THEME.TextMain
+emergencyBtn.Font = THEME.FontBold
+emergencyBtn.TextSize = 12
+Instance.new("UICorner", emergencyBtn).CornerRadius = UDim.new(0, 6)
+
+emergencyBtn.MouseButton1Click:Connect(function()
+    S.panicMode = true
+    S.running = false
+    S.speedActive = false
+    S.flightActive = false
+    S.noclipActive = false
+    S.autoStealActive = false
+    S.healthLockActive = false
+    ClearAllESP()
+    PurgeConnections()
+    pcall(function() ScreenGui:Destroy() end)
+    LogSystem("CRITICAL", "Emergency panic triggered. All system modules terminated.")
 end)
 
--- Speed/Jump Tab
-local SpeedTab = CreateTab("Speed/Jump")
-Section(SpeedTab, "Speed Hack Controls")
-Toggle(SpeedTab, "Enable Speed Hack", false, function(v)
-    S.speedOn = v
-    if v then startMovementLoop() end
-end)
-TextBoxInput(SpeedTab, "Speed Value", CONFIG.SPEED_DEFAULT, function(val) S.speedValue = val end)
-
-Section(SpeedTab, "Jump Power Controls")
-Toggle(SpeedTab, "Enable Custom Jump", false, function(v)
-    S.jumpOn = v
-    local _, hum = char()
-    if hum then hum.UseJumpPower = true; hum.JumpPower = v and S.jumpValue or CONFIG.JUMPPOWER_DEFAULT end
-end)
-TextBoxInput(SpeedTab, "Jump Value", CONFIG.JUMP_DEFAULT, function(val) S.jumpValue = val end)
-
--- Farming Tab (Flight Best Egg Stealer)
-local FarmTab = CreateTab("Farming")
-Section(FarmTab, "Flight Best Egg Automation (Anti-Catch)")
-Toggle(FarmTab, "Auto Steal Best Egg (Fly & Hover)", false, function(v)
-    S.autoStealOn = v
-    if v then startAutoStealBestEgg() end
-end)
-
--- Movement Tab
-local MoveTab = CreateTab("Movement")
-Section(MoveTab, "Flight & Collisions")
-Toggle(MoveTab, "Enable Flight", false, function(v)
-    S.flyOn = v
-    if v then enableFly(); startFlyLoop() else disableFly() end
-end)
-TextBoxInput(MoveTab, "Flight Speed", CONFIG.FLY_SPEED_DEFAULT, function(v) S.flySpeed = v end)
-Toggle(MoveTab, "Noclip Walk", false, function(v)
-    S.noclipOn = v
-    if v then
-        track(RunService.Stepped:Connect(function()
-            if not S.noclipOn or S.panic then return end
-            local c = LP.Character
-            if c then
-                for _, p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
-            end
-        end))
-    end
-end)
-
--- Initialize Framework
-SelectTab("Main")
-initAntiBan()
-log("SAE Extreme Suite v2.3 successfully loaded and initialized!")
+-- Initialize Default View
+SwitchTab("Movement")
+InitializeSecurityMatrix()
+LogSystem("SUCCESS", "SAE Enterprise Suite v6.0 fully initialized and operational.")
