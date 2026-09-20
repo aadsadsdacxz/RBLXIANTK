@@ -1,11 +1,7 @@
 -- language: Luau
--- SAE Hyper-Supreme Suite v6.0 — Enterprise Grade Multitool & Anti-Detection Matrix
--- Target: Roblox Mobile & PC Executors (Delta, Arceus X, CodeX, Synapse Z)
--- Architecture: Distributed Module, Metamethod Interception, Telemetry Obfuscation, Dynamic ESP & Physics Governor
-
+-- SAE Enterprise Suite v6.1 — Hardened Anti-Kick, Minimize Feature, & Multitool Matrix
 local CONFIG = {
-    ENGINE_VERSION       = "6.0.42-RELEASE",
-    AUTHOR               = "SAE Advanced Systems Engineering",
+    ENGINE_VERSION       = "6.1.0-SECURE",
     DEFAULT_SPEED        = 85,
     DEFAULT_FLY_SPEED    = 190,
     DEFAULT_JUMP_POWER   = 120,
@@ -13,7 +9,6 @@ local CONFIG = {
     AUTO_STEAL_TICK      = 0.1,
     HOVER_ELEVATION      = 25,
     TELEPORT_OFFSET      = Vector3.new(0, 4, 0),
-    MAX_RENDER_DISTANCE  = 5000,
 }
 
 local Players            = game:GetService("Players")
@@ -22,16 +17,13 @@ local UserInputService   = game:GetService("UserInputService")
 local TweenService       = game:GetService("TweenService")
 local Workspace          = game:GetService("Workspace")
 local Lighting           = game:GetService("Lighting")
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local CoreGui            = game:GetService("CoreGui")
-local HttpService        = game:GetService("HttpService")
 
 local LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 local Camera = Workspace.CurrentCamera
 local Mouse = LP:GetMouse()
 
--- System State Register
 local S = {
     running             = true,
     speedActive         = false,
@@ -45,12 +37,8 @@ local S = {
     healthLockActive    = false,
     fullbrightActive    = false,
     clickTpActive       = false,
-    espPlayersActive    = false,
     espEggsActive       = false,
     antiAfkActive       = true,
-    buddhaActive        = false,
-    hitboxExpander      = false,
-    infZoomActive       = false,
     spinbotActive       = false,
     panicMode           = false,
     
@@ -60,13 +48,10 @@ local S = {
     espObjects          = {},
 }
 
--- Comprehensive logging utility
 local function LogSystem(level, message)
-    local timestamp = os.date("%H:%M:%S")
-    print(string.format("[%s] [SAE v6.0] [%s] %s", timestamp, level:upper(), tostring(message)))
+    print(string.format("[SAE v6.1] [%s] %s", level:upper(), tostring(message)))
 end
 
--- Character extraction helper
 local function GetCharacterData()
     local char = LP.Character
     if not char then return nil, nil, nil end
@@ -75,11 +60,8 @@ local function GetCharacterData()
     return char, humanoid, rootPart
 end
 
--- Advanced Connection Tracker for Clean Unloading
 local function RegisterConnection(connection)
-    if connection then
-        table.insert(S.connectionRegistry, connection)
-    end
+    if connection then table.insert(S.connectionRegistry, connection) end
     return connection
 end
 
@@ -88,12 +70,9 @@ local function PurgeConnections()
         pcall(function() conn:Disconnect() end)
     end
     S.connectionRegistry = {}
-    LogSystem("INFO", "All execution threads and connections purged.")
 end
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 1: SECURITY, BYPASS, & METAMETHOD HOOK SUBSYSTEM
--- ═══════════════════════════════════════════════════════════════════════════════
+-- 🛡️ HARDENED ANTI-KICK & ANTI-DETECTION SUBSYSTEM
 local function InitializeSecurityMatrix()
     pcall(function()
         if hookmetamethod and getrawmetatable and setreadonly then
@@ -105,28 +84,21 @@ local function InitializeSecurityMatrix()
                 local method = getnamecallmethod()
                 if not S.panicMode then
                     if method == "Kick" and (self == LP or self == Players) then
-                        LogSystem("WARN", "Intercepted unauthorized server eviction attempt.")
-                        return
-                    end
-                    if method == "FireServer" and tostring(self):lower().find("teleportcheck") then
-                        return -- Obfuscate exploit telemetry
+                        LogSystem("WARN", "Blocked game server kick/eviction attempt.")
+                        return nil
                     end
                 end
                 return oldNamecall(self, ...)
             end)
             setreadonly(mt, true)
-            LogSystem("SUCCESS", "Metamethod security hooks successfully injected.")
+            LogSystem("SUCCESS", "Anti-kick security hook successfully engaged.")
         end
     end)
 end
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 2: ENHANCED MOVEMENT & LOCOMOTION GOVERNOR
--- ═══════════════════════════════════════════════════════════════════════════════
+-- Locomotion: Speed Hack
 RegisterConnection(RunService.RenderStepped:Connect(function(deltaTime)
     if not S.running or S.panicMode then return end
-    
-    -- Speed Hack Micro-Stepping
     if S.speedActive then
         local _, humanoid, rootPart = GetCharacterData()
         if humanoid and rootPart and humanoid.MoveDirection.Magnitude > 0 then
@@ -135,8 +107,6 @@ RegisterConnection(RunService.RenderStepped:Connect(function(deltaTime)
             rootPart.AssemblyLinearVelocity = Vector3.zero
         end
     end
-
-    -- Spinbot Fun / Utility Feature
     if S.spinbotActive then
         local _, _, rootPart = GetCharacterData()
         if rootPart then
@@ -145,21 +115,20 @@ RegisterConnection(RunService.RenderStepped:Connect(function(deltaTime)
     end
 end))
 
--- Infinite Jump Implementation
+-- Infinite Jump
 RegisterConnection(UserInputService.JumpRequest:Connect(function()
     if not S.running or S.panicMode or not S.jumpActive then return end
-    local _, humanoid, rootPart = GetCharacterData()
-    if humanoid and rootPart then
+    local _, _, rootPart = GetCharacterData()
+    if rootPart then
         rootPart.AssemblyLinearVelocity = Vector3.new(rootPart.AssemblyLinearVelocity.X, S.jumpValue, rootPart.AssemblyLinearVelocity.Z)
     end
 end))
 
--- Advanced Camera-Relative Flight Subsystem
+-- Flight Mode
 RegisterConnection(RunService.Heartbeat:Connect(function()
     if not S.running or S.panicMode or not S.flightActive then return end
     local _, humanoid, rootPart = GetCharacterData()
     if not rootPart then return end
-    
     if humanoid then humanoid.PlatformStand = true end
     
     local moveDirection = Vector3.zero
@@ -175,22 +144,18 @@ RegisterConnection(RunService.Heartbeat:Connect(function()
     rootPart.CFrame = CFrame.new(rootPart.Position, rootPart.Position + Camera.CFrame.LookVector)
 end))
 
--- Noclip Physics State Override
+-- Noclip Walk
 RegisterConnection(RunService.Stepped:Connect(function()
     if not S.running or S.panicMode or not S.noclipActive then return end
     local character, _, _ = GetCharacterData()
     if character then
         for _, descendant in ipairs(character:GetDescendants()) do
-            if descendant:IsA("BasePart") then
-                descendant.CanCollide = false
-            end
+            if descendant:IsA("BasePart") then descendant.CanCollide = false end
         end
     end
 end))
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 3: AUTOMATED FARMING & INTERACTION ENGINE
--- ═══════════════════════════════════════════════════════════════════════════════
+-- Auto Steal Best Egg & Base Hover
 local function TriggerProximityPrompts(targetModel)
     if not targetModel then return end
     for _, desc in ipairs(targetModel:GetDescendants()) do
@@ -198,27 +163,19 @@ local function TriggerProximityPrompts(targetModel)
             pcall(function()
                 desc.HoldDuration = 0
                 desc.MaxActivationDistance = 99999
-                if fireproximityprompt then
-                    fireproximityprompt(desc)
-                else
-                    desc:InputHoldBegin()
-                    task.wait(0.01)
-                    desc:InputHoldEnd()
-                end
+                if fireproximityprompt then fireproximityprompt(desc)
+                else desc:InputHoldBegin() task.wait(0.01) desc:InputHoldEnd() end
             end)
         end
     end
 end
 
--- Background Task for High-Priority Egg Stealing & Safety Hover
 task.spawn(function()
     while true do
         if S.running and not S.panicMode and S.autoStealActive then
             local _, _, rootPart = GetCharacterData()
             if rootPart then
-                if not S.savedPosition then
-                    S.savedPosition = rootPart.CFrame
-                end
+                if not S.savedPosition then S.savedPosition = rootPart.CFrame end
                 
                 local optimalTarget, maxPriority = nil, -1
                 local closestDistance = CONFIG.AUTO_STEAL_RANGE
@@ -253,15 +210,12 @@ task.spawn(function()
                         S.currentStealTarget = optimalTarget
                         local safeHoverPos = part.Position + Vector3.new(0, CONFIG.HOVER_ELEVATION, 0)
                         
-                        -- Teleport to hover position above target
                         rootPart.CFrame = CFrame.new(safeHoverPos)
                         rootPart.AssemblyLinearVelocity = Vector3.zero
                         task.wait(0.02)
-                        
                         TriggerProximityPrompts(optimalTarget)
                         task.wait(0.02)
                         
-                        -- Return to safe anchor base
                         if S.savedPosition then
                             rootPart.CFrame = CFrame.new(S.savedPosition.Position + Vector3.new(0, CONFIG.HOVER_ELEVATION, 0))
                             rootPart.AssemblyLinearVelocity = Vector3.zero
@@ -274,22 +228,15 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 4: UTILITY TOOLS & ENVIRONMENT MODIFIERS
--- ═══════════════════════════════════════════════════════════════════════════════
-
--- Health State Lock (Buddha / Invulnerability Loop)
+-- Health Lock & Fullbright
 RegisterConnection(RunService.Heartbeat:Connect(function()
     if not S.running or S.panicMode then return end
     if S.healthLockActive then
         local _, humanoid = GetCharacterData()
-        if humanoid then
-            humanoid.Health = humanoid.MaxHealth
-        end
+        if humanoid then humanoid.Health = humanoid.MaxHealth end
     end
 end))
 
--- Fullbright Lighting Controller
 RegisterConnection(RunService.RenderStepped:Connect(function()
     if not S.running or S.panicMode then return end
     if S.fullbrightActive then
@@ -300,7 +247,7 @@ RegisterConnection(RunService.RenderStepped:Connect(function()
     end
 end))
 
--- Click Teleport Implementation
+-- Click Teleport
 RegisterConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not S.running or S.panicMode or gameProcessed then return end
     if S.clickTpActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -314,28 +261,17 @@ RegisterConnection(UserInputService.InputBegan:Connect(function(input, gameProce
     end
 end))
 
--- Anti-AFK Virtual User Heartbeat
+-- Anti-AFK
 local virtualUser = game:GetService("VirtualUser")
 RegisterConnection(LP.Idled:Connect(function()
     if S.running and S.antiAfkActive then
         virtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
         task.wait(1)
         virtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
-        LogSystem("INFO", "Anti-AFK input simulation dispatched.")
     end
 end))
 
--- Infinite Camera Zoom
-task.spawn(function()
-    pcall(function()
-        LP.CameraMaxZoomDistance = 999999
-        LP.CameraMinZoomDistance = 0.5
-    end)
-end)
-
--- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 5: VISUAL ESP & OVERLAY SYSTEM
--- ═══════════════════════════════════════════════════════════════════════════════
+-- ESP Management
 local function CreateESPBox(targetObject, colorHex, labelText)
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "SAE_ESP_Tag"
@@ -352,36 +288,25 @@ local function CreateESPBox(targetObject, colorHex, labelText)
     label.Font = Enum.Font.GothamBold
     label.TextSize = 12
     
-    if targetObject:IsA("Model") then
-        local primary = targetObject.PrimaryPart or targetObject:FindFirstChildWhichIsA("BasePart")
-        if primary then
-            billboard.Adornee = primary
-            billboard.Parent = CoreGui
-            table.insert(S.espObjects, billboard)
-        end
-    elseif targetObject:IsA("BasePart") then
-        billboard.Adornee = targetObject
+    local primary = targetObject:IsA("Model") and (targetObject.PrimaryPart or targetObject:FindFirstChildWhichIsA("BasePart"))
+    if primary then
+        billboard.Adornee = primary
         billboard.Parent = CoreGui
         table.insert(S.espObjects, billboard)
     end
 end
 
 local function ClearAllESP()
-    for _, obj in ipairs(S.espObjects) do
-        pcall(function() obj:Destroy() end)
-    end
+    for _, obj in ipairs(S.espObjects) do pcall(function() obj:Destroy() end) end
     S.espObjects = {}
 end
 
--- Egg ESP Scanner Loop
 task.spawn(function()
     while true do
         if S.running and not S.panicMode and S.espEggsActive then
-            -- Refresh ESP periodically
             for _, obj in ipairs(Workspace:GetDescendants()) do
                 if obj:IsA("Model") and (obj.Name:lower():find("egg") or obj.Name:lower():find("pet")) then
-                    local part = obj:FindFirstChildWhichIsA("BasePart", true)
-                    if part and not obj:FindFirstChild("SAE_ESP_Tag") then
+                    if not obj:FindFirstChild("SAE_ESP_Tag") then
                         CreateESPBox(obj, Color3.fromRGB(255, 215, 0), "[" .. obj.Name .. "]")
                     end
                 end
@@ -394,7 +319,7 @@ task.spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- MODULE 6: ADVANCED GRAPHICAL USER INTERFACE (ULTRA-EXTENDED FRAMEWORK)
+-- USER INTERFACE WITH MINIMIZE BUTTON & TABS
 -- ═══════════════════════════════════════════════════════════════════════════════
 local THEME = {
     Primary      = Color3.fromRGB(12, 12, 18),
@@ -410,15 +335,13 @@ local THEME = {
 }
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SAE_Enterprise_Suite_v6"
+ScreenGui.Name = "SAE_Enterprise_Suite_v6_1"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = PlayerGui end
 
--- Floating Toggle Orb (Mobile / PC Toggle)
+-- Floating Orb Toggle
 local ToggleButton = Instance.new("TextButton", ScreenGui)
-ToggleButton.Name = "SAE_ToggleOrb"
 ToggleButton.Size = UDim2.new(0, 50, 0, 50)
 ToggleButton.Position = UDim2.new(0, 20, 0.4, 0)
 ToggleButton.BackgroundColor3 = THEME.Secondary
@@ -427,28 +350,59 @@ ToggleButton.TextColor3 = THEME.Accent
 ToggleButton.Font = THEME.FontBold
 ToggleButton.TextSize = 13
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(1, 0)
+Instance.new("UIStroke", ToggleButton).Color = THEME.Accent
 
-local orbStroke = Instance.new("UIStroke", ToggleButton)
-orbStroke.Color = THEME.Accent
-orbStroke.Thickness = 2
-
--- Main Window Frame
+-- Main Window
 local MainWindow = Instance.new("Frame", ScreenGui)
-MainWindow.Name = "SAE_MainWindow"
 MainWindow.Size = UDim2.new(0, 620, 0, 440)
 MainWindow.Position = UDim2.new(0.5, -310, 0.5, -220)
 MainWindow.BackgroundColor3 = THEME.Primary
-MainWindow.Visible = true
 Instance.new("UICorner", MainWindow).CornerRadius = UDim.new(0, 12)
+Instance.new("UIStroke", MainWindow).Color = THEME.Border
 
-local mainStroke = Instance.new("UIStroke", MainWindow)
-mainStroke.Color = THEME.Border
-mainStroke.Thickness = 1
+-- Header Bar
+local HeaderBar = Instance.new("Frame", MainWindow)
+HeaderBar.Size = UDim2.new(1, 0, 0, 42)
+HeaderBar.BackgroundColor3 = THEME.Secondary
+Instance.new("UICorner", HeaderBar).CornerRadius = UDim.new(0, 12)
 
--- Dragging Logic for Main Window
+local HeaderTitle = Instance.new("TextLabel", HeaderBar)
+HeaderTitle.Size = UDim2.new(1, -100, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 16, 0, 0)
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Text = "⚡ SAE v6.1 — Anti-Kick Secured & Minimized Ready"
+HeaderTitle.TextColor3 = THEME.TextMain
+HeaderTitle.Font = THEME.FontBold
+HeaderTitle.TextSize = 13
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Minimize Button (-)
+local MinimizeBtn = Instance.new("TextButton", HeaderBar)
+MinimizeBtn.Size = UDim2.new(0, 32, 0, 32)
+MinimizeBtn.Position = UDim2.new(1, -40, 0.5, -16)
+MinimizeBtn.BackgroundColor3 = THEME.Primary
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = THEME.TextMain
+MinimizeBtn.Font = THEME.FontBold
+MinimizeBtn.TextSize = 16
+Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
+
+local isMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    MinimizeBtn.Text = isMinimized and "+" : "-"
+    for _, child in ipairs(MainWindow:GetChildren()) do
+        if child ~= HeaderBar and child ~= Instance.new("UICorner") then
+            child.Visible = not isMinimized
+        end
+    end
+    MainWindow.Size = isMinimized and UDim2.new(0, 620, 0, 42) or UDim2.new(0, 620, 0, 440)
+end)
+
+-- Dragging Support
 do
-    local dragging, dragInput, dragStart, startPos
-    MainWindow.InputBegan:Connect(function(input)
+    local dragging, dragStart, startPos
+    HeaderBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -462,58 +416,30 @@ do
         end
     end)
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
     end)
-    
-    ToggleButton.MouseButton1Click:Connect(function()
-        MainWindow.Visible = not MainWindow.Visible
-    end)
+    ToggleButton.MouseButton1Click:Connect(function() MainWindow.Visible = not MainWindow.Visible end)
 end
 
--- Top Header Bar
-local HeaderBar = Instance.new("Frame", MainWindow)
-HeaderBar.Size = UDim2.new(1, 0, 0, 42)
-HeaderBar.BackgroundColor3 = THEME.Secondary
-Instance.new("UICorner", HeaderBar).CornerRadius = UDim.new(0, 12)
-
-local HeaderTitle = Instance.new("TextLabel", HeaderBar)
-HeaderTitle.Size = UDim2.new(1, -20, 1, 0)
-HeaderTitle.Position = UDim2.new(0, 16, 0, 0)
-HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "⚡ SAE Enterprise Suite v6.0 — Full Telemetry & Optimization Matrix"
-HeaderTitle.TextColor3 = THEME.TextMain
-HeaderTitle.Font = THEME.FontBold
-HeaderTitle.TextSize = 13
-HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-
--- Sidebar Tab Navigation Container
+-- Tabs & Navigation Layout
 local Sidebar = Instance.new("ScrollingFrame", MainWindow)
 Sidebar.Size = UDim2.new(0, 140, 1, -54)
 Sidebar.Position = UDim2.new(0, 8, 0, 46)
 Sidebar.BackgroundColor3 = THEME.Secondary
 Sidebar.ScrollBarThickness = 2
 Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 8)
-
 local sidebarLayout = Instance.new("UIListLayout", Sidebar)
 sidebarLayout.Padding = UDim.new(0, 6)
-sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Content Area Frame
 local ContentArea = Instance.new("Frame", MainWindow)
 ContentArea.Size = UDim2.new(1, -160, 1, -54)
 ContentArea.Position = UDim2.new(0, 154, 0, 46)
 ContentArea.BackgroundColor3 = THEME.Secondary
 Instance.new("UICorner", ContentArea).CornerRadius = UDim.new(0, 8)
 
-local TabsRegistry = {}
-local TabButtonRegistry = {}
-
+local TabsRegistry, TabButtonRegistry = {}, {}
 local function SwitchTab(tabName)
-    for name, page in pairs(TabsRegistry) do
-        page.Visible = (name == tabName)
-    end
+    for name, page in pairs(TabsRegistry) do page.Visible = (name == tabName) end
     for name, btn in pairs(TabButtonRegistry) do
         local active = (name == tabName)
         btn.BackgroundColor3 = active and THEME.Accent or THEME.Primary
@@ -539,22 +465,15 @@ local function CreateTabModule(tabName)
     tabPage.Visible = false
     tabPage.CanvasSize = UDim2.new(0, 0, 0, 900)
     tabPage.ScrollBarThickness = 3
-    
     local pageLayout = Instance.new("UIListLayout", tabPage)
     pageLayout.Padding = UDim.new(0, 6)
-    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
     
     TabsRegistry[tabName] = tabPage
     TabButtonRegistry[tabName] = tabBtn
-    
-    tabBtn.MouseButton1Click:Connect(function()
-        SwitchTab(tabName)
-    end)
-    
+    tabBtn.MouseButton1Click:Connect(function() SwitchTab(tabName) end)
     return tabPage
 end
 
--- UI Element Builders (Toggles & Inputs)
 local function AddSectionHeader(parent, text)
     local lbl = Instance.new("TextLabel", parent)
     lbl.Size = UDim2.new(1, 0, 0, 24)
@@ -604,11 +523,7 @@ local function AddToggleElement(parent, labelText, defaultState, callback)
     end)
 end
 
--- ═══════════════════════════════════════════════════════════════════════════════
--- POPULATE TABS WITH EXTENSIVE CONTROLS (15+ MODS)
--- ═══════════════════════════════════════════════════════════════════════════════
-
--- Tab 1: Movement & Physics
+-- Populate Menu Modules
 local movementTab = CreateTabModule("Movement")
 AddSectionHeader(movementTab, "Locomotion & Flight Engines")
 AddToggleElement(movementTab, "Bypass-Resistant Speed Hack", false, function(v) S.speedActive = v end)
@@ -617,28 +532,23 @@ AddToggleElement(movementTab, "Camera-Relative Flight Mode", false, function(v) 
 AddToggleElement(movementTab, "Noclip Walk (Collision Disabler)", false, function(v) S.noclipActive = v end)
 AddToggleElement(movementTab, "Spinbot Rotation Utility", false, function(v) S.spinbotActive = v end)
 
--- Tab 2: Automation & Farming
 local farmingTab = CreateTabModule("Automation")
 AddSectionHeader(farmingTab, "Egg Stealer & Anti-Catch System")
 AddToggleElement(farmingTab, "Auto Steal Best Egg & Hover Base", false, function(v) S.autoStealActive = v end)
 AddToggleElement(farmingTab, "Ctrl + Click Teleport Engine", false, function(v) S.clickTpActive = v end)
 
--- Tab 3: Combat & Survival
 local combatTab = CreateTabModule("Survival")
 AddSectionHeader(combatTab, "State Protections & Health Management")
-AddToggleElement(combatTab, "Health Lock (Buddha Invulnerability)", false, function(v) S.healthLockActive = v end)
+AddToggleElement(combatTab, "Health Lock (Invulnerability)", false, function(v) S.healthLockActive = v end)
 AddToggleElement(combatTab, "Anti-AFK Connection Keepalive", true, function(v) S.antiAfkActive = v end)
 
--- Tab 4: Visuals & ESP
 local visualsTab = CreateTabModule("Visuals")
 AddSectionHeader(visualsTab, "ESP & Environment Enhancements")
 AddToggleElement(visualsTab, "Fullbright Lighting Override", false, function(v) S.fullbrightActive = v end)
 AddToggleElement(visualsTab, "Egg & Pet High-Tier ESP", false, function(v) S.espEggsActive = v end)
 
--- Tab 5: Settings & Emergency
 local settingsTab = CreateTabModule("Emergency")
 AddSectionHeader(settingsTab, "System Safety & Termination Controls")
-
 local emergencyBtn = Instance.new("TextButton", settingsTab)
 emergencyBtn.Size = UDim2.new(1, 0, 0, 42)
 emergencyBtn.BackgroundColor3 = THEME.Danger
@@ -651,18 +561,12 @@ Instance.new("UICorner", emergencyBtn).CornerRadius = UDim.new(0, 6)
 emergencyBtn.MouseButton1Click:Connect(function()
     S.panicMode = true
     S.running = false
-    S.speedActive = false
-    S.flightActive = false
-    S.noclipActive = false
-    S.autoStealActive = false
-    S.healthLockActive = false
     ClearAllESP()
     PurgeConnections()
     pcall(function() ScreenGui:Destroy() end)
-    LogSystem("CRITICAL", "Emergency panic triggered. All system modules terminated.")
+    LogSystem("CRITICAL", "Emergency panic triggered. All modules terminated.")
 end)
 
--- Initialize Default View
 SwitchTab("Movement")
 InitializeSecurityMatrix()
-LogSystem("SUCCESS", "SAE Enterprise Suite v6.0 fully initialized and operational.")
+LogSystem("SUCCESS", "SAE Enterprise Suite v6.1 ready with Anti-Kick protection.")
